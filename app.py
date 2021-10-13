@@ -1,4 +1,6 @@
+from re import M
 from flask import Flask
+from flask import json
 from flask.json import jsonify
 from flask_restful import Api, Resource
 from pandas.core.indexes.datetimelike import DatetimeTimedeltaMixin
@@ -6,7 +8,21 @@ from pandas.core.indexing import convert_to_index_sliceable
 from data_loader import (
     get_cpi_data,
     get_export_data,
+    get_iip_data,
+    get_iip_data_by_month_year,
+    get_iip_data_from_to,
     get_import_data,
+    get_import_data_by_interval,
+    get_import_data_by_month_year,
+    get_import_data_for_report,
+    get_import_month_list_and_year_list,
+    get_month_and_year_iip_list,
+    get_thuchi_data_by_month,
+    get_thuchi_data_fromto,
+    get_thuchi_year_list_and_month_list,
+    get_unemployment_report_by_year,
+    get_unemployment_report_from_to,
+    get_unemployment_year_list,
     read_cpi,
     read_iip,
     get_cpi_timeline,
@@ -22,22 +38,21 @@ from datetime import datetime, time
 import numpy as np
 import joblib
 import scipy.stats as st
-
-from utils import generateColumnsByMonth, generateValuesForTables
+import requests
+from utils import generate_iip_table, generateColumnsByMonth, generateColumnsDataUnemployment, generateColumnsForIip, generateColumnsForRevenue, generateColumnsForUnemployment, generateColumsForImport, generateDataForRevenue, generateImportTable, generateValuesForTables
 
 # define flask app
-app = Flask(__name__)
+app = Flask(__name__, static_folder="build", static_url_path="/")
 app.url_map.strict_slashes = False
 api = Api(app)
 cors = CORS(app)
 app.config["CORS_HEADERS"] = "Content-Type"
 
 # load model
-# cpi_models = joblib.load("saved_model/cpi_forecast_model.joblib")
-# iip_models = joblib.load("saved_model/iip_forecast_model.joblib")
-# import_models = joblib.load("saved_model/import_forecast_model.joblib")
-# export_models = joblib.load("saved_model/export_forecast_model.joblib")
-
+cpi_models = joblib.load("saved_model/cpi_forecast_model.joblib")
+iip_models = joblib.load("saved_model/iip_forecast_model.joblib")
+import_models = joblib.load("saved_model/import_forecast_model.joblib")
+export_models = joblib.load("saved_model/export_forecast_model.joblib")
 
 def get_cpi_forecast(models, next=3, alpha=0.95):
     arima_models = models["arima_models"]
@@ -124,7 +139,311 @@ def get_forecast(models, next=3, alpha=0.95):
     return reg_out.tolist(), lower_reg_out.tolist(), upper_reg_out.tolist(), timeline
     # return reg_out.tolist(), lower, upper, timeline
     # return reg_out.tolist(), lower1.tolist(), upper1.tolist(), timeline
+@app.route("/")
+def index():
+    return app.send_static_file("index.html")
+    # return {"data": "helello"}
 
+@app.route("/login")
+def login():
+    token = request.args.get("token", None)
+    url = f'http://sso.ai2c.asia/org/authentication/Authenticate?token={token}'
+    req = requests.get(url)
+    res = req.json()
+
+    isExpire = res["Expired"]
+
+    return jsonify({
+        "data": {
+            "token": token,
+            "tokenInfo": req.json(),
+            "expire": isExpire
+        }
+    })
+@app.route("/api/v1/<city>/revenue-report")
+def get_revenue_report_data(city):
+    month = request.args.get("month", None)
+    year = request.args.get("year", None)
+    from_month = request.args.get("fromMonth", None)
+    from_year = request.args.get("fromYear", None)
+    to_month = request.args.get("toMonth", None)
+    to_year = request.args.get("toYear", None)
+    cols = [
+            {
+                "title": "TT",
+                "dataIndex": "tt",
+                "key": "tt",
+                "width": 100,
+                "fixed": "left",
+            },
+            {
+                "title": "Tháng",
+                "dataIndex": "index_name",
+                "key": "index_name",
+                "width": 100,
+                "fixed": "left",
+            },
+            {
+                "title": "Đơn vị",
+                "dataIndex": "unit",
+                "key": "unit",
+                "width": 100,
+                "fixed": "left",
+            },
+        ]
+
+    if month and year:
+        names, columns, timeline,  values_list = get_thuchi_data_by_month(city, month, year)
+    else:
+        names, columns, timeline,  values_list = get_thuchi_data_fromto(city, from_month, from_year, to_month, to_year)
+
+    revenue_cols = generateColumnsForRevenue(names[0], columns[0], 0)
+    expenditure_cols = generateColumnsForRevenue(names[1], columns[1], len(columns[0]))
+    cols.append(revenue_cols)
+    cols.append(expenditure_cols)
+
+    revenue_data = generateDataForRevenue(values_list[0], timeline, 0)
+    expenditure_data = generateDataForRevenue(values_list[1], timeline, len(columns[0]))
+    month_list, year_list = get_thuchi_year_list_and_month_list(city)
+    
+    columnsData = np.concatenate(values_list, axis=1)
+    columnsData = generateDataForRevenue(columnsData, timeline, 0)
+    return jsonify({
+        "name": names.tolist(),
+        # "columnsData": [revenue_data, expenditure_data],
+        "columnsData": columnsData,
+        "columns": cols,
+        "timeline": timeline.tolist(),
+        "month_list": month_list,
+        "year_list": year_list
+    })
+
+@app.route("/api/v1/<city>/unemployment-report")
+def get_unemployment_report_data(city):
+    # get time params
+    year = request.args.get("year", None)
+    from_year = request.args.get("fromYear", None)
+    to_year = request.args.get("toYear", None)
+    columns = [
+        {
+            "title": "TT",
+            "dataIndex": "tt",
+            "key": "tt",
+            "width": 100,
+            "fixed": "left",
+        },
+        {
+            "title": "Tháng",
+            "dataIndex": "index_name",
+            "key": "index_name",
+            "width": 100,
+            "fixed": "left",
+        },
+        {
+            "title": "Đơn vị",
+            "dataIndex": "unit",
+            "key": "unit",
+            "width": 100,
+            "fixed": "left",
+        },
+    ]
+
+    if year:
+        names, timelines, values = get_unemployment_report_by_year(city, year)
+    else:
+        names, timelines, values = get_unemployment_report_from_to(city, from_year, to_year)
+    
+    for i in range(len(names)):
+        columns.append(generateColumnsForUnemployment(names[i], i * 9))
+    
+    columnsData = generateColumnsDataUnemployment(values, timelines)
+
+    year_list = get_unemployment_year_list(city)
+    return jsonify({
+        "name": names.tolist(),
+        "columnsData": columnsData,
+        "columns": columns,
+        "timeline": timelines.tolist(),
+        "month_list": None,
+        "year_list": year_list
+    })
+
+    
+
+
+@app.route("/api/v1/<city>/import-report")
+def get_import_report_data(city):
+    # get time params
+    month = request.args.get("month", None)
+    year = request.args.get("year", None)
+    from_month = request.args.get("fromMonth", None)
+    from_year = request.args.get("fromYear", None)
+    to_month = request.args.get("toMonth", None)
+    to_year = request.args.get("toYear", None)
+
+    columns = [
+        {
+            "title": "TT",
+            "dataIndex": "tt",
+            "key": "tt",
+            "width": 100,
+            "fixed": "left",
+        },
+        {
+            "title": "Chỉ tiêu",
+            "dataIndex": "index_name",
+            "key": "index_name",
+            "width": 100,
+            "fixed": "left",
+        },
+        {
+            "title": "Đơn vị",
+            "dataIndex": "unit",
+            "key": "unit",
+            "width": 100,
+            "fixed": "left",
+        },
+    ]
+
+    if month and year:
+        name, data, timeline = get_import_data_by_month_year(city, month, year)
+    else:
+        name, data, timeline = get_import_data_by_interval(city, from_month, from_year, to_month, to_year)    
+
+    for i in range(len(timeline)):
+        columns.append(generateColumsForImport(timeline[i], i * 6))
+    
+    columnsData = generateImportTable(data, name)
+    
+    month_list, year_list  = get_import_month_list_and_year_list(city)
+    return jsonify({
+        "name": name.tolist(),
+        "columnsData": columnsData,
+        "columns": columns,
+        "timeline": timeline.tolist(),
+        "month_list": month_list,
+        "year_list": year_list
+    })
+
+@app.route("/api/v1/<city>/export-report")
+def get_export_report_data(city):
+    # get time params
+    month = request.args.get("month", None)
+    year = request.args.get("year", None)
+    from_month = request.args.get("fromMonth", None)
+    from_year = request.args.get("fromYear", None)
+    to_month = request.args.get("toMonth", None)
+    to_year = request.args.get("toYear", None)
+
+    columns = [
+        {
+            "title": "TT",
+            "dataIndex": "tt",
+            "key": "tt",
+            "width": 100,
+            "fixed": "left",
+        },
+        {
+            "title": "Chỉ tiêu",
+            "dataIndex": "index_name",
+            "key": "index_name",
+            "width": 100,
+            "fixed": "left",
+        },
+        {
+            "title": "Đơn vị",
+            "dataIndex": "unit",
+            "key": "unit",
+            "width": 100,
+            "fixed": "left",
+        },
+    ]
+
+    if month and year:
+        name, data, timeline = get_import_data_by_month_year(city, month, year, sheet_name=1)
+    else:
+        name, data, timeline = get_import_data_by_interval(city, from_month, from_year, to_month, to_year, sheet_name=1)    
+
+    for i in range(len(timeline)):
+        columns.append(generateColumsForImport(timeline[i], i * 6))
+    
+    columnsData = generateImportTable(data, name)
+    
+    month_list, year_list  = get_import_month_list_and_year_list(city, sheet_name=1)
+    return jsonify({
+        "name": name.tolist(),
+        "columnsData": columnsData,
+        "columns": columns,
+        "timeline": timeline.tolist(),
+        "month_list": month_list,
+        "year_list": year_list
+    })
+
+@app.route("/api/v1/<city>/iip-report")
+def get_iip_report_data(city):
+    # get time params
+    month = request.args.get("month", None)
+    year = request.args.get("year", None)
+    from_month = request.args.get("fromMonth", None)
+    from_year = request.args.get("fromYear", None)
+    to_month = request.args.get("toMonth", None)
+    to_year = request.args.get("toYear", None)
+
+    month_list, year_list = get_month_and_year_iip_list(city)
+# columns
+    columns = [
+        {
+            "title": "TT",
+            "dataIndex": "tt",
+            "key": "tt",
+            "width": 100,
+            "fixed": "left",
+        },
+        {
+            "title": "Chỉ tiêu",
+            "dataIndex": "index_name",
+            "key": "index_name",
+            "width": 100,
+            "fixed": "left",
+        },
+        {
+            "title": "Đơn vị",
+            "dataIndex": "unit",
+            "key": "unit",
+            "width": 100,
+            "fixed": "left",
+        },
+    ]
+    timeline = []
+    data = []
+    # columns = []
+    columnsData = []
+    name = []
+    # get list month,
+    if month and year:
+        data = get_iip_data_by_month_year(city, month, year)
+    else:
+        data = get_iip_data_from_to(city, from_month, from_year, to_month, to_year)
+
+    timeline = data["timeline"]
+    
+    name = data["name"]
+
+    data1, data2 = data["data"]
+    for i in range(len(timeline)):
+        colName = generateColumnsForIip(timeline[i], i * 2)
+        columns.append(colName)
+
+    columnsData = generate_iip_table(data1["data"], data2["data"], name)
+    return jsonify({
+        "timeline": timeline.tolist(),
+        "index_name": name.tolist(),
+        # "data": data,
+        "columns": columns,
+        "columnsData": columnsData,
+        "year_list": year_list,
+        "month_list": month_list
+    })
 
 @app.route("/api/v1/<city>/cpi-report")
 @cross_origin()

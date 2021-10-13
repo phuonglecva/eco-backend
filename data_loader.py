@@ -1,7 +1,8 @@
+from os import name, set_inheritable
 import pandas as pd
 import numpy as np
 from config import variables
-from datetime import datetime
+from datetime import datetime, time
 
 data_dir = variables['data_dir']
 
@@ -268,4 +269,286 @@ def get_cpi_data(city, filename='thuongmai.xlsx'):
 
 def get_iip_data(city, filename='iip_data_.xlsx'):
     filename = f'{data_dir}{city}/{filename}'
+    iip_data = pd.read_excel(filename)
+
+    timeline = iip_data.iloc[0, 2::2].values[:-2]
+    index_name = iip_data.iloc[3:, 1].values
+
+    colName1 = iip_data.iloc[1, 2]
+    colName2 = iip_data.iloc[1, 3]
+
+    col1Data = iip_data.iloc[3:, 2::2].values[:, :-2]
+    col2Data = iip_data.iloc[3:, 3::2].values[:, :-2]
+
+    return index_name, timeline, {"name": colName1, "data": col1Data}, {"name": colName2, "data": col2Data}
+
+
+def get_iip_data_by_month_year(city, month, year):
+    name, timeline, data1, data2 = get_iip_data(city)
+    short_time = [t.split(" ")[-1] for t in timeline]
+
+    time_id = -1
+    for i in range(len(short_time)):
+        if short_time[i] == f'{month}/{year}':
+            time_id = i
+            break
+    # Check if iip at month year exist in database
+    if time_id == -1:
+        return None
     
+    ti = timeline[time_id: time_id + 1]
+    data1['data'] = data1['data'][:, time_id: time_id + 1]
+    data2['data'] = data2['data'][:, time_id: time_id + 1]
+
+    return {
+        "timeline": ti,
+        "name": name,
+        "data": [
+            data1, data2
+        ]
+    }
+
+def get_iip_data_from_to(city, from_month, from_year, to_month, to_year):
+    name, timeline, data1, data2 = get_iip_data(city)
+    short_time = [t.split(" ")[-1] for t in timeline]
+
+    start_id = -1
+    end_id = -1
+
+    for i in range(len(short_time)):
+        if short_time[i] == f'{from_month}/{from_year}':
+            start_id = i
+        if short_time[i] == f'{to_month}/{to_year}':
+            end_id = i
+    
+    if start_id == -1 and start_id == -1:
+        return None
+
+    if start_id == -1:
+        start_id = 0
+    
+    if end_id == -1:
+        end_id = len(short_time) - 1
+    
+
+    ti = timeline[start_id: end_id + 1]
+    data1['data'] = data1['data'][:, start_id: end_id + 1]
+    data2['data'] = data2['data'][:, start_id: end_id + 1]
+
+    return {
+        "timeline": ti,
+        "name": name,
+        "data": [
+            data1, data2
+        ]
+    }
+
+def get_month_and_year_iip_list(city, filename='iip_data_.xlsx'):
+    filename = f'{data_dir}{city}/{filename}'
+    iip_data = pd.read_excel(filename)
+
+    timeline = iip_data.iloc[0, 2::2].values[:-2]
+    short_time = [t.split(" ")[-1] for t in timeline]
+
+    # get list month,
+    month_list = set([int(t.split("/")[0]) for t in short_time[:-2]])
+    month_list = list(sorted(month_list))
+
+    # get year list
+    year_list = set([int(t.split("/")[-1]) for t in short_time[:-2]])
+    year_list = list(sorted(year_list))
+
+    return month_list, year_list
+
+
+def get_import_data_for_report(city, filename='xuatnhapkhau.xlsx', sheet_name=0):
+
+    filename = f'{data_dir}{city}/{filename}'
+
+    import_data = pd.read_excel(filename, sheet_name=sheet_name)
+    import_data.fillna(0, inplace=True)
+    timeline = import_data.iloc[0, 3::6].values[:-2]
+    time_len = len(timeline)
+    index_name = import_data.iloc[6:, 1].values
+    values = import_data.iloc[6:, 3:].values[:, :time_len * 6]
+    # split values 
+    splited_values = np.array_split(values, time_len, axis=1)
+
+    return index_name, splited_values, timeline
+
+def get_import_data_by_month_year(city, month, year, sheet_name=0):
+    name, data, timeline = get_import_data_for_report(city, sheet_name=sheet_name)
+    shortTime = [t.split(" ")[-1] for t in timeline]
+    print(shortTime, f'{month}/{year}')
+    timeId = -1
+    for i in range(len(shortTime)):
+        if shortTime[i] == f'{month}/{year}':
+            print("im here")
+            timeId = i
+            break
+    
+    if timeId == -1:
+        return None
+    
+    return name, data[timeId: timeId+1], timeline[timeId: timeId + 1]
+
+def get_import_data_by_interval(city, fromMonth, fromYear, toMonth, toYear, sheet_name=0):
+    name, data, timeline = get_import_data_for_report(city, sheet_name=sheet_name)
+    shortTime = [t.split(" ")[-1] for t in timeline]
+
+    fromId = -1
+    toId = -1
+    for i in range(len(shortTime)):
+        if shortTime[i] == f'{fromMonth}/{fromYear}':
+            fromId = i
+        if shortTime[i] == f'{toMonth}/{toYear}':
+            toId = i
+    if fromId == -1 and toId == -1:
+        return None
+    
+    fromId = 0 if fromId == -1 else fromId
+    toId = len(shortTime) - 1 if toId == -1 else toId
+
+    return name, data[fromId: toId + 1], timeline[fromId: toId + 1]
+
+def get_import_month_list_and_year_list(city, filename='xuatnhapkhau.xlsx', sheet_name=0):
+    filename = f'{data_dir}{city}/{filename}'
+    import_data = pd.read_excel(filename, sheet_name=sheet_name)
+    timeline = import_data.iloc[0, 3::6].values[:-2]
+
+    short_time = [t.split(" ")[-1] for t in timeline]
+
+    # get list month,
+    month_list = set([int(t.split("/")[0]) for t in short_time[:-2]])
+    month_list = list(sorted(month_list))
+
+    # get year list
+    year_list = set([int(t.split("/")[-1]) for t in short_time[:-2]])
+    year_list = list(sorted(year_list))
+
+    return month_list, year_list
+
+def get_unemployment_report_data(city,filename='thatnghiep.xlsx'):
+    filename = f'{data_dir}{city}/{filename}'
+    data = pd.read_excel(filename)
+
+    names = data.columns.values[1::9]
+    timeline = data.iloc[2:, 0]
+    values = data.iloc[2:, 1:]
+
+    return names, timeline.values, values.values
+    
+def get_unemployment_report_by_year(city, year):
+    names, timeline, values = get_unemployment_report_data(city)
+    print(timeline, year)
+    timeId = -1
+    for i in range(len(timeline)):
+        if int(timeline[i]) == int(year):
+            timeId = i
+            break
+    if timeId == -1:
+        return None
+    timeline = timeline[timeId: timeId + 1]
+    values = values[ timeId: timeId + 1,:]
+    return names, timeline, values
+    
+def get_unemployment_report_from_to(city, fromYear, toYear):
+    names, timeline, values = get_unemployment_report_data(city)
+
+    fromId = -1
+    toId = -1
+    for i in range(len(timeline)):
+        if int(timeline[i]) == int(fromYear):
+            fromId = i
+        if int(timeline[i]) == int(toYear):
+            toId = i
+    if fromId == -1 and toId == -1: 
+        return None
+    fromId = fromId if fromId != -1 else 0
+    toId = toId if toId != -1 else len(timeline) - 1
+
+    timeline = timeline[fromId: toId + 1]
+    values = values[ fromId: toId + 1, :]
+    return names, timeline, values
+
+def get_unemployment_year_list(city,filename='thatnghiep.xlsx'):
+    filename = f'{data_dir}{city}/{filename}'
+    data = pd.read_excel(filename)
+    timeline = sorted(set(t for t in data.iloc[2:, 0]))
+
+    return list(timeline)
+
+def get_thuchi_data(city,filename='thuchingansach.xlsx'):
+    filename = f'{data_dir}{city}/{filename}'
+    data = pd.read_excel(filename)
+    columns = np.split(data.iloc[0, :].values[1:-1], 2)
+
+    # generate full timeline 
+    timeline = data.iloc[1:, 0].values
+    timeline = pd.date_range(timeline[-1], timeline[0], freq='m')
+    timeline = pd.Series(timeline).dt.strftime("%m/%y")
+    timeline = pd.DataFrame(timeline, columns=["Tháng"])
+
+    data['Tháng'] = data['Tháng'].dt.strftime("%m/%y")
+
+    full_data = pd.merge(timeline, data, how="left", on=["Tháng"])
+    full_data.fillna(0, inplace=True)
+    # get timeline, values, columns title
+    timeline = full_data['Tháng'].values
+    values = full_data.values[:, 1:-1]
+    values_list = np.split(values, 2, axis=1)
+    names = full_data.columns[1::9].values[:-1]
+
+    return names, columns, timeline, values_list
+
+def get_thuchi_data_by_month(city, month, year):
+    names, columns, timeline, values_list = get_thuchi_data(city)
+
+    timeId = -1
+    for i in range(len(timeline)):
+        ti = timeline[i]
+        currM, currY = ti.split("/")
+        print(currM, currY)
+        if int(currM) == int(month) and int(year) == int(currY):
+            timeId = i
+            break
+    
+    if timeId == -1:
+        return None
+    
+    return names, columns, timeline[timeId: timeId + 1], [values[timeId: timeId + 1, :] for values in values_list]
+
+def get_thuchi_data_fromto(city, fromMonth, fromYear, toMonth, toYear):
+    names, columns, timeline, values_list = get_thuchi_data(city)
+
+    fromId = -1
+    toId = -1
+    for i in range(len(timeline)):
+        ti = timeline[i]
+        currM, currY = ti.split("/")
+        if int(currM) == int(fromMonth) and int(fromYear) == int(currY):
+            fromId = i
+        if int(currM) == int(toMonth) and int(toYear) == int(currY):
+            toId = i
+
+    if fromId == -1 and toId == -1:
+        return None
+    fromId = 0 if fromId == -1 else fromId
+    toId = len(timeline) - 1 if toId == -1 else toId
+    return names, columns, timeline[fromId: toId + 1], [values[fromId: toId + 1, :] for values in values_list]
+
+
+def get_thuchi_year_list_and_month_list(city,filename='thuchingansach.xlsx'):
+    filename = f'{data_dir}{city}/{filename}'
+    data = pd.read_excel(filename)
+
+    # generate full timeline 
+    timeline = data.iloc[1:, 0].values
+    timeline = pd.date_range(timeline[-1], timeline[0], freq='m')
+    month_list = pd.Series(timeline).dt.strftime("%m")
+    year_list = pd.Series(timeline).dt.strftime("%y")
+
+    month_list = list(sorted(set([m for m in month_list])))
+    year_list = list(sorted(set([y for y in year_list])))
+
+    return month_list, year_list

@@ -1,0 +1,36 @@
+{
+  "files": {
+    "main.css": "/static/css/main.6030eba6.chunk.css",
+    "main.js": "/static/js/main.20d2e003.chunk.js",
+    "main.js.map": "/static/js/main.20d2e003.chunk.js.map",
+    "runtime-main.js": "/static/js/runtime-main.e0175e59.js",
+    "runtime-main.js.map": "/static/js/runtime-main.e0175e59.js.map",
+    "static/css/2.a95be28f.chunk.css": "/static/css/2.a95be28f.chunk.css",
+    "static/js/2.ada67a82.chunk.js": "/static/js/2.ada67a82.chunk.js",
+    "static/js/2.ada67a82.chunk.js.map": "/static/js/2.ada67a82.chunk.js.map",
+    "static/js/3.7235ba26.chunk.js": "/static/js/3.7235ba26.chunk.js",
+    "static/js/3.7235ba26.chunk.js.map": "/static/js/3.7235ba26.chunk.js.map",
+    "index.html": "/index.html",
+    "static/css/2.a95be28f.chunk.css.map": "/static/css/2.a95be28f.chunk.css.map",
+    "static/css/main.6030eba6.chunk.css.map": "/static/css/main.6030eba6.chunk.css.map",
+    "static/js/2.ada67a82.chunk.js.LICENSE.txt": "/static/js/2.ada67a82.chunk.js.LICENSE.txt",
+    "static/media/aic-logo.65897ddc.png": "/static/media/aic-logo.65897ddc.png",
+    "static/media/bg-color.c4ff524e.jpg": "/static/media/bg-color.c4ff524e.jpg",
+    "static/media/Login.css": "/static/media/bg-login.ea6ef2fe.jpg",
+    "static/media/App.css": "/static/media/hero-bg.3543e46e.png",
+    "static/media/csph.648430bb.PNG": "/static/media/csph.648430bb.PNG",
+    "static/media/dhcl.16cc2e17.PNG": "/static/media/dhcl.16cc2e17.PNG",
+    "static/media/intro.614bc7d2.mp4": "/static/media/intro.614bc7d2.mp4",
+    "static/media/ktxh.e74a9174.PNG": "/static/media/ktxh.e74a9174.PNG",
+    "static/media/ptch.59e843eb.PNG": "/static/media/ptch.59e843eb.PNG",
+    "static/media/qdkt.ac25fbfa.PNG": "/static/media/qdkt.ac25fbfa.PNG",
+    "static/media/rr.e7e485df.PNG": "/static/media/rr.e7e485df.PNG"
+  },
+  "entrypoints": [
+    "static/js/runtime-main.e0175e59.js",
+    "static/css/2.a95be28f.chunk.css",
+    "static/js/2.ada67a82.chunk.js",
+    "static/css/main.6030eba6.chunk.css",
+    "static/js/main.20d2e003.chunk.js"
+  ]
+}
