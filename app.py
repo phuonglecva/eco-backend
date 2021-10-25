@@ -40,9 +40,43 @@ import joblib
 import scipy.stats as st
 import requests
 from utils import generate_iip_table, generateColumnsByMonth, generateColumnsDataUnemployment, generateColumnsForIip, generateColumnsForRevenue, generateColumnsForUnemployment, generateColumsForImport, generateDataForRevenue, generateImportTable, generateValuesForTables
+from datetime import timedelta, timezone
+
+# jwt import 
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
+from flask_jwt_extended import set_access_cookies
 
 # define flask app
 app = Flask(__name__, static_folder="build", static_url_path="/")
+
+app.config["JWT_SECRET_KEY"] = "secret"  # Change this!
+app.config["JWT_TOKEN_LOCATION"] = ["headers", "cookies", "json", "query_string"]
+app.config["JWT_COOKIE_SECURE"] = False
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
+
+jwt = JWTManager(app)
+@app.after_request
+def refresh_expiring_jwts(response):
+    try:
+        exp_timestamp = get_jwt()["exp"]
+        now = datetime.now(timezone.utc)
+        target_timestamp = datetime.timestamp(now + timedelta(minutes=30))
+        if target_timestamp > exp_timestamp:
+            access_token = create_access_token(identity=get_jwt_identity())
+            set_access_cookies(response, access_token)
+        return response
+    except (RuntimeError, KeyError):
+        # Case where there is not a valid JWT. Just return the original respone
+        return response
+
 app.url_map.strict_slashes = False
 api = Api(app)
 cors = CORS(app)
@@ -139,6 +173,7 @@ def get_forecast(models, next=3, alpha=0.95):
     return reg_out.tolist(), lower_reg_out.tolist(), upper_reg_out.tolist(), timeline
     # return reg_out.tolist(), lower, upper, timeline
     # return reg_out.tolist(), lower1.tolist(), upper1.tolist(), timeline
+
 @app.route("/")
 def index():
     return app.send_static_file("index.html")
@@ -150,18 +185,33 @@ def login():
     url = f'http://sso.ai2c.asia/org/authentication/Authenticate?token={token}'
     req = requests.get(url)
     res = req.json()
-
+    
     isExpire = res["Expired"]
+    username = res["Username"]
+    if isExpire:
+        return jsonify({
+            "data": {
+                "message": "Token is expired"
+            }
+        })
+    else:
+        access_token = create_access_token(identity=username)
 
-    return jsonify({
-        "data": {
-            "token": token,
-            "tokenInfo": req.json(),
-            "expire": isExpire
-        }
-    })
+        return jsonify({
+            "data": {
+                # "token": token,
+                # "tokenInfo": req.json(),
+                "expire": isExpire,
+                "accessToken": access_token,
+                "message": "Login successfully",
+                # "userInfo": req.json()
+            }
+        })
+
 @app.route("/api/v1/<city>/revenue-report")
+@jwt_required()
 def get_revenue_report_data(city):
+    # print(get_jwt_identity())    
     month = request.args.get("month", None)
     year = request.args.get("year", None)
     from_month = request.args.get("fromMonth", None)
@@ -390,7 +440,7 @@ def get_iip_report_data(city):
     to_year = request.args.get("toYear", None)
 
     month_list, year_list = get_month_and_year_iip_list(city)
-# columns
+    # columns
     columns = [
         {
             "title": "TT",
